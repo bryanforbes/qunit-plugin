@@ -1,0 +1,47 @@
+{
+  "suites": [
+    "_tests/tests/unit/index.js",
+    "_tests/tests/unit/getInterface.js"
+  ],
+  "browser": {
+    "loader": {
+      "script": "dojo2",
+      "options": {
+        "map": {
+          "*": {
+            "@dojo": "node_modules/@dojo"
+          }
+        },
+        "packages": [
+          { "name": "src", "location": "_build/src" },
+          { "name": "intern", "location": "node_modules/intern" },
+          { "name": "tslib", "location": "node_modules/tslib", "main": "tslib" },
+          { "name": "sinon", "location": "node_modules/sinon", "main": "pkg/sinon.js" }
+        ]
+      }
+    },
+    "plugins": "_tests/tests/support/MockDojoModule.js"
+  },
+
+  "node": {
+    "plugins": "_tests/tests/support/MockNodeModule.js"
+  },
+
+  "configs": {
+    "coverage": {
+      "description": "Generate full coverage",
+      "coverage": "_build/src/**/*.js"
+    },
+
+    "wd": {
+      "description": "Run tests in Chrome using Selenium",
+      "tunnel": "selenium",
+      "environments": { "browserName": "chrome", "fixSessionCapabilities": "no-detect" }
+    },
+
+    "wdcoverage": {
+      "description": "Run coverage tests locally",
+      "extends": [ "wd", "coverage" ]
+    }
+  }
+}

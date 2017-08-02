@@ -1,0 +1,28 @@
+{
+  "name": "@theintern/qunit-plugin",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "intern-dev-clean && intern-dev-build",
+    "clean": "intern-dev-clean",
+    "lint": "intern-dev-lint",
+    "test": "NODE_PATH=_build intern",
+    "watch": "intern-dev-build watch"
+  },
+  "author": "",
+  "license": "BSD-3-Clause",
+  "dependencies": {
+    "intern": "~4.0.0-alpha.13",
+    "tslib": "~1.7.1"
+  },
+  "devDependencies": {
+    "@dojo/loader": "~2.0.0-beta1.1",
+    "@theintern/dev": "~0.4.3",
+    "@types/mockery": "~1.4.29",
+    "@types/sinon": "~2.3.3",
+    "mockery": "~2.1.0",
+    "sinon": "~2.4.1",
+    "typescript": "~2.4.2"
+  }
+}

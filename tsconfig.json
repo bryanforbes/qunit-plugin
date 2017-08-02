@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "module": "umd",
+    "lib": [
+      "es5",
+      "dom",
+      "es2015.collection",
+      "es2015.promise",
+      "es2015.symbol",
+      "es2015.symbol.wellknown",
+      "es2015.iterable"
+    ],
+    "outDir": "_build",
+    "rootDir": ".",
+		"declaration": true,
+    "importHelpers": true,
+    "sourceMap": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "moduleResolution": "node",
+    "typeRoots": [
+      "./node_modules/@types",
+      "./node_modules/intern/types"
+    ],
+    "types": [
+      "intern",
+      "node"
+    ]
+  },
+  "include": [
+    "./src/**/*.ts"
+  ]
+}
