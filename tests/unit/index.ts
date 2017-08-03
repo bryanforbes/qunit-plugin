@@ -17,7 +17,7 @@ type MockInterface = {
 
 function createMockInterface(): MockInterface {
 	return [
-		'extend', 'start', 'stop', 'asyncTest', 'module', 'test',
+		'extend', 'stack', 'module', 'start', 'test', 'on',
 		'begin', 'done', 'log', 'moduleDone', 'moduleStart', 'testDone', 'testStart'
 	].reduce((iface: any, key) => {
 		iface[key] = sinon.stub();
@@ -68,21 +68,21 @@ suite('src/index', () => {
 		assert.strictEqual(module.getInterface, mockGetInterface);
 
 		assert.isFunction(module.extend);
-		assert.isFunction(module.start);
-		assert.isFunction(module.stop);
-		assert.isFunction(module.asyncTest);
+		assert.isFunction(module.stack);
 		assert.isFunction(module.module);
+		assert.isFunction(module.start);
 		assert.isFunction(module.test);
 		assert.isFunction(module.begin);
 		assert.isFunction(module.done);
 		assert.isFunction(module.log);
 		assert.isFunction(module.moduleDone);
 		assert.isFunction(module.moduleStart);
+		assert.isFunction(module.on);
 		assert.isFunction(module.testDone);
 		assert.isFunction(module.testStart);
 	});
 
-	function addTest(name: InterfaceKeys, args: any[] = []) {
+	function addTest(name: InterfaceKeys, ...args: any[]) {
 		test(`.${name}()`, () => {
 			(module as any)[name].apply(null, args);
 
@@ -91,17 +91,17 @@ suite('src/index', () => {
 		});
 	}
 
-	addTest('extend', [{}, {}, false]);
+	addTest('extend', {}, {}, false);
+	addTest('stack', 5);
+	addTest('module', 'foo', {});
 	addTest('start');
-	addTest('stop');
-	addTest('asyncTest', [ 'foo', () => undefined ]);
-	addTest('module', [ 'foo', {} ]);
-	addTest('test', [ 'foo', () => undefined ]);
-	addTest('begin', [ () => undefined ]);
-	addTest('done', [ () => undefined ]);
-	addTest('log', [ () => undefined ]);
-	addTest('moduleDone', [ () => undefined ]);
-	addTest('moduleStart', [ () => undefined ]);
-	addTest('testDone', [ () => undefined ]);
-	addTest('testStart', [ () => undefined ]);
+	addTest('test', 'foo', () => undefined);
+	addTest('begin', () => undefined);
+	addTest('done', () => undefined);
+	addTest('log', () => undefined);
+	addTest('moduleDone', () => undefined);
+	addTest('moduleStart', () => undefined);
+	addTest('on', 'begin', () => undefined);
+	addTest('testDone', () => undefined);
+	addTest('testStart', () => undefined);
 });

@@ -53,16 +53,16 @@ suite('src/getInterface', () => {
 		assert.isObject(iface.assert);
 		assert.isObject(iface.config);
 		assert.isFunction(iface.extend);
-		assert.isFunction(iface.start);
-		assert.isFunction(iface.stop);
-		assert.isFunction(iface.asyncTest);
+		assert.isFunction(iface.stack);
 		assert.isFunction(iface.module);
+		assert.isFunction(iface.start);
 		assert.isFunction(iface.test);
 		assert.isFunction(iface.begin);
 		assert.isFunction(iface.done);
 		assert.isFunction(iface.log);
 		assert.isFunction(iface.moduleDone);
 		assert.isFunction(iface.moduleStart);
+		assert.isFunction(iface.on);
 		assert.isFunction(iface.testDone);
 		assert.isFunction(iface.testStart);
 
@@ -450,7 +450,7 @@ suite('src/getInterface', () => {
 					'Expect should return number of expected assertions if 0 or > 1 argument(s) is(are) passed');
 			});
 
-			test('.push', async () => {
+			test('.pushResult', async () => {
 				const results: any[] = [];
 
 				iface.module('qunit suite 1');
@@ -459,18 +459,23 @@ suite('src/getInterface', () => {
 					let actual = 1;
 					const expected = 1;
 
-					assertParam.push( actual === expected, actual, expected, '"actual" should be equal to "expected"');
+					assertParam.pushResult({
+						result: actual === expected,
+						actual,
+						expected,
+						message: '"actual" should be equal to "expected"'
+					});
 					results.push(assertParam._numAssertions);
 
 					actual = 2;
 
 					assert.throws(function () {
-						assertParam.push(
-							actual === expected,
+						assertParam.pushResult({
+							result: actual === expected,
 							actual,
 							expected,
-							'"actual" should be equal to "expected"'
-						);
+							message: '"actual" should be equal to "expected"'
+						});
 					}, AssertionError, 'push should throw an assertion error on fail');
 				});
 

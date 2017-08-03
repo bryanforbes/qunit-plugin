@@ -9,10 +9,6 @@ import { Interface, BaseAssert, Assertions, Config, Hooks, NestedCallback } from
 
 let interfaces = new WeakMap<Executor, Interface>();
 
-interface RegisterTestFunction {
-	(this: QUnitTest, test: QUnitTest): void | PromiseLike<void>;
-}
-
 interface QUnitSuite extends Suite {
 	_qunitContext: any;
 }
@@ -50,12 +46,6 @@ export default function getInterface(executor: Executor) {
 
 	let currentSuites: Suite[];
 
-	function registerTest(name: string, test: RegisterTestFunction) {
-		currentSuites.forEach(parent => {
-			parent.tests.push(new Test({ name, parent, test }));
-		});
-	}
-
 	function wrapChai(name: keyof Chai.AssertStatic) {
 		return function (this: BaseAssert): void {
 			// TODO: Could try/catch errors to make them act more like the way QUnit acts, where an assertion failure
@@ -92,12 +82,6 @@ export default function getInterface(executor: Executor) {
 		notPropEqual: wrapChai('notDeepEqual'),
 		notStrictEqual: wrapChai('notStrictEqual'),
 		ok: wrapChai('ok'),
-		/*push(ok, actual, expected, message) {
-			++this._numAssertions;
-			if (!ok) {
-				throw new AssertionError(message!, { actual, expected });
-			}
-		},*/
 		propEqual: wrapChai('deepEqual'),
 		strictEqual: wrapChai('strictEqual'),
 		pushResult(result) {
@@ -142,6 +126,52 @@ export default function getInterface(executor: Executor) {
 			assert.includeMembers(this._steps!, steps, message);
 		}
 	};
+
+	function verifyExpects(assert: BaseAssert) {
+		if (isNaN(assert._expectedAssertions) && QUnit.config.requireExpects) {
+			throw new AssertionError('Expected number of assertions to be defined, but expect() was not called.');
+		}
+
+		if (!isNaN(assert._expectedAssertions) && assert._numAssertions !== assert._expectedAssertions) {
+			throw new AssertionError(`Expected ${assert._expectedAssertions} assertions, but ${assert._numAssertions} were run`);
+		}
+	}
+
+	function createAssert(suiteOrTest: Suite | Test): BaseAssert {
+		const assert = create(baseAssert, {
+			_expectedAssertions: NaN,
+			_numAssertions: 0,
+			_steps: [],
+
+			async(callCount: number = 1) {
+				const dfd = suiteOrTest.async!();
+
+				if (isNaN(callCount) || callCount < 1) {
+					callCount = 1;
+				}
+
+				function done() {
+					--callCount;
+					if (callCount === 0) {
+						dfd.resolve();
+					}
+					else if (callCount < 0) {
+						throw new Error('resolve called too many times');
+					}
+				}
+
+				assert.async = () => done;
+
+				return done;
+			},
+
+			timeout(duration: number) {
+				suiteOrTest.timeout = duration;
+			}
+		});
+
+		return assert;
+	}
 
 	let autostartHandle: Handle | undefined;
 	let moduleName: string | undefined;
@@ -243,55 +273,31 @@ export default function getInterface(executor: Executor) {
 				parentSuite.tests.push(suite);
 				currentSuites.push(suite);
 
-				if (typeof hooks === 'object') {
-					if (hooks.beforeEach) {
-						on(suite, 'beforeEach', function (this: QUnitSuite) {
-							(hooks as any).beforeEach.call(this._qunitContext);
+				if (hooks && typeof hooks !== 'function') {
+					Object.keys(hooks).forEach((key: keyof Hooks) => {
+						on(suite, key, () => {
+							(hooks as Hooks)[key]!.call((suite as QUnitSuite)._qunitContext);
 						});
-					}
-
-					if (hooks.afterEach) {
-						on(suite, 'afterEach', function (this: QUnitSuite) {
-							(hooks as any).afterEach.call(this._qunitContext);
-						});
-					}
+					});
 				}
 			});
 		},
 
-		test(name, test) {
-			registerTest(name, self => {
-				const testAssert = create(baseAssert, {
-					_expectedAssertions: NaN,
-					_numAssertions: 0,
-					_steps: [],
+		test(name, callback) {
+			function test(self: QUnitTest) {
+				const testAssert = createAssert(self);
+				const result = callback.call(self.parent._qunitContext, testAssert);
 
-					async(callCount?: number) {
-						const dfd = self.async(undefined, callCount);
-
-						function done() {
-							dfd.resolve();
-						}
-
-						testAssert.async = () => done;
-
-						return done;
-					},
-
-					timeout(duration: number) {
-						self.timeout = duration;
-					}
-				});
-
-				test.call(self.parent._qunitContext, testAssert);
-
-				if (isNaN(testAssert._expectedAssertions) && QUnit.config.requireExpects) {
-					throw new AssertionError('Expected number of assertions to be defined, but expect() was not called.');
+				if (result && result.then) {
+					return result.then(() => {
+						verifyExpects(testAssert);
+					});
 				}
 
-				if (!isNaN(testAssert._expectedAssertions) && testAssert._numAssertions !== testAssert._expectedAssertions) {
-					throw new AssertionError(`Expected ${testAssert._expectedAssertions} assertions, but ${testAssert._numAssertions} were run`);
-				}
+				verifyExpects(testAssert);
+			}
+			currentSuites.forEach(parent => {
+				parent.add(new Test({ name, parent, test }));
 			});
 		},
 
@@ -305,6 +311,7 @@ export default function getInterface(executor: Executor) {
 				callback({ totalTests });
 			});
 		},
+
 		done(callback) {
 			executor.on('runEnd', (executor: Executor) => {
 				const failed = executor.suites.reduce((numTests, suite) => {
@@ -328,6 +335,7 @@ export default function getInterface(executor: Executor) {
 				});
 			});
 		},
+
 		log(callback) {
 			executor.on('testEnd', (test: QUnitTest) => {
 				callback({
@@ -341,6 +349,7 @@ export default function getInterface(executor: Executor) {
 				});
 			});
 		},
+
 		moduleDone(callback) {
 			executor.on('suiteEnd', (suite: QUnitSuite) => {
 				if (suite._qunitContext) {
@@ -354,6 +363,7 @@ export default function getInterface(executor: Executor) {
 				}
 			});
 		},
+
 		moduleStart(callback) {
 			executor.on('suiteStart', (suite: QUnitSuite) => {
 				if (suite._qunitContext) {
@@ -363,6 +373,7 @@ export default function getInterface(executor: Executor) {
 				}
 			});
 		},
+
 		testDone(callback) {
 			executor.on('testEnd', (test: QUnitTest) => {
 				callback({
@@ -375,6 +386,7 @@ export default function getInterface(executor: Executor) {
 				});
 			});
 		},
+
 		testStart(callback) {
 			executor.on('testStart', (test: QUnitTest) => {
 				callback({
