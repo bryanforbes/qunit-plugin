@@ -5,7 +5,7 @@ import { on } from '@dojo/core/aspect';
 import { create } from '@dojo/core/lang';
 import { Handle } from '@dojo/interfaces/core';
 
-import { Interface, BaseAssert, Assertions, Config } from './types';
+import { Interface, BaseAssert, Assertions, Config, Hooks, NestedCallback } from './types';
 
 let interfaces = new WeakMap<Executor, Interface>();
 
@@ -69,9 +69,13 @@ export default function getInterface(executor: Executor) {
 	const { assert, AssertionError } = executor.getPlugin('chai');
 
 	const baseAssert: BaseAssert = {
+		_steps: null,
 		_expectedAssertions: NaN,
 		_numAssertions: 0,
 
+		async(_acceptCallCount) {
+			return null as any;
+		},
 		deepEqual: wrapChai('deepEqual'),
 		equal: wrapChai('equal'),
 		expect: function (this: BaseAssert, numTotal?: number) {
@@ -84,17 +88,28 @@ export default function getInterface(executor: Executor) {
 		} as Assertions['expect'],
 		notDeepEqual: wrapChai('notDeepEqual'),
 		notEqual: wrapChai('notEqual'),
+		notOk: wrapChai('notOk'),
 		notPropEqual: wrapChai('notDeepEqual'),
 		notStrictEqual: wrapChai('notStrictEqual'),
 		ok: wrapChai('ok'),
-		push(ok, actual, expected, message) {
+		/*push(ok, actual, expected, message) {
 			++this._numAssertions;
 			if (!ok) {
 				throw new AssertionError(message!, { actual, expected });
 			}
-		},
+		},*/
 		propEqual: wrapChai('deepEqual'),
 		strictEqual: wrapChai('strictEqual'),
+		pushResult(result) {
+			this._numAssertions++;
+			if (!result.result) {
+				assert.fail(result.actual, result.expected, result.message);
+			}
+		},
+		step(message) {
+			this._steps!.push(message);
+		},
+		timeout(_duration: number) {},
 		throws: ((): BaseAssert['throws'] => {
 			const throws = wrapChai('throws');
 			return function (this: BaseAssert, fn, expected, message) {
@@ -122,21 +137,9 @@ export default function getInterface(executor: Executor) {
 				}
 			};
 		})(),
-
-		raises() {
-			return this.throws.apply(this, arguments);
-		},
-
-		verifyAssertions() {
-			if (isNaN(this._expectedAssertions) && QUnit.config.requireExpects) {
-				throw new AssertionError('Expected number of assertions to be defined, but expect() was ' +
-					'not called.');
-			}
-
-			if (!isNaN(this._expectedAssertions) && this._numAssertions !== this._expectedAssertions) {
-				throw new AssertionError('Expected ' + this._expectedAssertions + ' assertions, but ' +
-					this._numAssertions + ' were run');
-			}
+		verifySteps(steps, message) {
+			this._numAssertions++;
+			assert.includeMembers(this._steps!, steps, message);
 		}
 	};
 
@@ -190,11 +193,13 @@ export default function getInterface(executor: Executor) {
 
 		extend,
 
+		stack(): string {
+			return '';
+		},
 		start: /* istanbul ignore next */ () => {},
-		stop: /* istanbul ignore next */ () => {},
 
 		// test registration
-		asyncTest(name, test) {
+		/*asyncTest(name, test) {
 			registerTest(name, self => {
 				self.timeout = QUnit.config.testTimeout;
 
@@ -212,7 +217,7 @@ export default function getInterface(executor: Executor) {
 							dfd.resolve();
 						}
 						finally {
-							QUnit.stop = QUnit.start = /* istanbul ignore next */ function () {};
+							QUnit.stop = QUnit.start = /* istanbul ignore next *//* function () {};
 						}
 					}
 				});
@@ -224,25 +229,30 @@ export default function getInterface(executor: Executor) {
 					dfd.reject(error);
 				}
 			});
-		},
+		},*/
 
-		module(name, hooks) {
+		module(name: string, hooks?: Hooks | NestedCallback, nested?: NestedCallback) {
+			if (typeof hooks === 'function') {
+				nested = hooks;
+				hooks = undefined;
+			}
+
 			currentSuites = [];
 			executor.addSuite(parentSuite => {
 				const suite = new Suite({ name: name, parent: parentSuite, _qunitContext: {} } as any);
 				parentSuite.tests.push(suite);
 				currentSuites.push(suite);
 
-				if (hooks) {
-					if (hooks.setup) {
+				if (typeof hooks === 'object') {
+					if (hooks.beforeEach) {
 						on(suite, 'beforeEach', function (this: QUnitSuite) {
-							hooks.setup!.call(this._qunitContext);
+							(hooks as any).beforeEach.call(this._qunitContext);
 						});
 					}
 
-					if (hooks.teardown) {
+					if (hooks.afterEach) {
 						on(suite, 'afterEach', function (this: QUnitSuite) {
-							hooks.teardown!.call(this._qunitContext);
+							(hooks as any).afterEach.call(this._qunitContext);
 						});
 					}
 				}
@@ -251,9 +261,37 @@ export default function getInterface(executor: Executor) {
 
 		test(name, test) {
 			registerTest(name, self => {
-				const testAssert = create(baseAssert, { _expectedAssertions: NaN, _numAssertions: 0 });
+				const testAssert = create(baseAssert, {
+					_expectedAssertions: NaN,
+					_numAssertions: 0,
+					_steps: [],
+
+					async(callCount?: number) {
+						const dfd = self.async(undefined, callCount);
+
+						function done() {
+							dfd.resolve();
+						}
+
+						testAssert.async = () => done;
+
+						return done;
+					},
+
+					timeout(duration: number) {
+						self.timeout = duration;
+					}
+				});
+
 				test.call(self.parent._qunitContext, testAssert);
-				testAssert.verifyAssertions();
+
+				if (isNaN(testAssert._expectedAssertions) && QUnit.config.requireExpects) {
+					throw new AssertionError('Expected number of assertions to be defined, but expect() was not called.');
+				}
+
+				if (!isNaN(testAssert._expectedAssertions) && testAssert._numAssertions !== testAssert._expectedAssertions) {
+					throw new AssertionError(`Expected ${testAssert._expectedAssertions} assertions, but ${testAssert._numAssertions} were run`);
+				}
 			});
 		},
 
@@ -344,6 +382,10 @@ export default function getInterface(executor: Executor) {
 					module: test.parent.name
 				});
 			});
+		},
+
+		on(name, callback) {
+			QUnit[name](callback);
 		}
 	};
 

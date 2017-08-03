@@ -2,7 +2,7 @@ import getInterface from './getInterface';
 import {
 	Interface, Assertions, Config, TestFunction, Hooks, Callback, BeginData,
 	DoneData, LogData, ModuleDoneData, ModuleStartData, TestDoneData,
-	TestStartData
+	TestStartData, NestedCallback
 } from './types';
 
 export { getInterface };
@@ -21,16 +21,12 @@ export function start() {
 	QUnit.start();
 }
 
-export function stop() {
-	QUnit.stop();
-}
-
-export function asyncTest(name: string, test: TestFunction) {
-	QUnit.asyncTest(name, test);
-}
-
-export function module(name: string, hooks?: Hooks) {
-	QUnit.module(name, hooks);
+export function module(name: string): void;
+export function module(name: string, hooks: Hooks): void;
+export function module(name: string, nested: NestedCallback): void;
+export function module(name: string, hooks: Hooks, nested: NestedCallback): void;
+export function module(name: string, hooks?: any, nested?: any) {
+	QUnit.module(name, hooks, nested);
 }
 
 export function test(name: string, test: TestFunction) {
